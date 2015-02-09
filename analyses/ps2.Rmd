@@ -1,4 +1,6 @@
 ---
+Sal Lempert
+
 title: 'Psych 254 W15 PS #2'
 author: "Mike Frank"
 date: "February 4, 2015"
@@ -19,7 +21,7 @@ I've adapted this for psych 254 purposes
 First install and load the package.
 
 ```{r}
-install.packages("ggplot2")
+#install.packages("ggplot2")
 library(ggplot2)
 ```
 
@@ -35,16 +37,21 @@ qplot(diamonds$carat, diamonds$price)
 Scatter plots are trivial, and easy to add features to. Modify this plot so that it uses the dataframe rather than working from variables in the general namespace (good to get away from retyping `diamonds$` every time you reference a variable). 
 
 ```{r}
+d = diamonds
+head(d)
+qplot(d$carat, d$price)
 ```
 
 Try adding clarity and cut, using shape and color as your visual variables. 
 
 ```{r}
+qplot(d$carat, d$price, color = d$cut, shape = d$clarity)
 ```
 
 One of the primary benefits of `ggplot2` is the use of facets - also known as small multiples in the Tufte vocabulary. That last plot was probably hard to read. Facets could make it better. Try adding a `facets = x ~ y` argument. `x ~ y` means row facets are by x, column facets by y. 
 
 ```{r}
+qplot(carat, price, color = cut, shape = clarity, facets = cut ~ clarity, data = d)
 ```
 
 But facets can also get overwhelming. Try to strike a good balance between color, shape, and faceting.
@@ -52,6 +59,7 @@ But facets can also get overwhelming. Try to strike a good balance between color
 HINT: `facets = . ~ x` puts x on the columns, but `facets = ~ x` (no dot) *wraps* the facets. These are underlying calls to different functions, `facet_wrap` (no dot) and `facet_grid` (two arguments). 
 
 ```{r}
+qplot(carat, price, color = cut, facets = cut~ clarity, data = d)
 ```
 
 The basic unit of a ggplot plot is a "geom" - a mapping between data (via an "aesthetic") and a particular geometric configuration on coordinate axes. 
