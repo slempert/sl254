@@ -1,0 +1,339 @@
+---
+Sal Lempert
+
+title: 'Psych 254 W15 PS #3'
+author: "Mike Frank"
+date: "February 22, 2015"
+output: html_document
+---
+
+This is problem set #3, in which we want you to integrate your knowledge of data wrangling with some basic simulation skills and some linear modeling.
+
+```{r}
+library(dplyr)
+library(ggplot2)
+```
+
+Part 1: Basic simulation and NHST
+=================================
+
+Let's start by convincing ourselves that t-tests have the appropriate false positive rate. Run 10,000 t-tests with standard, normally-distributed data from a made up 30-person, single-measurement experiment (the command for sampling from a normal distribution is `rnorm`). What's the mean number of "significant" results?
+
+First do this using a `for` loop.
+
+```{r}
+#dat = data.frame(x=numeric())
+
+sig.count = 0;
+for(i in 1:10000)
+  {
+  temp = rnorm(30)
+  t.temp = t.test(temp)
+  if(t.temp[3]<0.05)
+    {
+    sig.count = sig.count +1;
+    }
+  }
+cat("Number of significant results: ", sig.count)
+cat("False positive rate: ",sig.count/10000)
+```
+
+485 significant results out of 10,000. False positive rate = 0.0485
+
+Next, do this using the `replicate` function:
+
+```{r}
+dat = replicate(10000, t.test(rnorm(30))[[3]]<0.05)
+summary(dat)
+cat("Number of significant results out of 10,000: ", summary(dat)[[3]])
+cat("False positive rate: ", (as.numeric(summary(dat)[[3]])/10000))
+```
+533 significant results out of 10,000.  False positive rate = 0.0533
+
+Ok, that was a bit boring. Let's try something moderately more interesting - let's implement a p-value sniffing simulation, in the style of Simons, Nelson, & Simonsohn (2011).
+
+Consider this scenario: you have done an experiment, again with 30 participants (one observation each, just for simplicity). The question is whether their performance is above chance. You aren't going to check the p-value every trial, but let's say you run 30 - then if the p-value is within the range p < .25 and p > .05, you optionally run 30 more and add those data, then test again. But if the original p value is < .05, you call it a day, and if the original is > .25, you also stop.  
+
+First, write a function that implements this sampling regime.
+
+```{r}
+double.sample <- function () {
+  temp = rnorm(30)
+  ptemp = t.test(temp)[[3]]
+  while(ptemp < 0.25 && ptemp > 0.05)
+    {
+      l = length(temp)
+      b = l+1
+      e = l+30
+      temp[b:e] = rnorm(30)
+      ptemp = t.test(temp)[[3]]
+    }
+ptemp
+}
+```
+
+Now call this function 10k times and find out what happens. 
+
+```{r}
+dat = replicate(10000, double.sample()<0.05)
+summary(dat)
+cat("Number of significant results out of 10,000: ", summary(dat)[[3]])
+cat("False positive rate: ", (as.numeric(summary(dat)[[3]])/10000))
+```
+
+Is there an inflation of false positives? How bad is it?
+
+Yes there is an inflation of false positives!  Now the false positive rate is 0.0809
+
+Now modify this code so that you can investigate this "double the sample" rule in a bit more depth. Let's see what happens when you double the sample ANY time p > .05 (not just when p < .25), or when you do it only if p < .5 or < .75. How do these choices affect the false positive rate?
+
+HINT: Try to do this by making the function `double.sample` take the upper p value as an argument, so that you can pass this through dplyr.
+
+huhh?
+
+HINT 2: You may need more samples. Find out by looking at how the results change from run to run.
+
+```{r}
+double.sample.5 <- function () {
+  temp = rnorm(30)
+  ptemp = t.test(temp)[[3]]
+  while(ptemp < 0.5 && ptemp > 0.05)
+    {
+      l = length(temp)
+      b = l+1
+      e = l+30
+      temp[b:e] = rnorm(30)
+      ptemp = t.test(temp)[[3]]
+    }
+ptemp
+}
+dat5 = replicate(10000, double.sample.5()<0.05)
+summary(dat5)
+cat("Number of significant results out of 10,000 using <0.5 rule: ", summary(dat5)[[3]])
+cat("False positive rate: ", (as.numeric(summary(dat5)[[3]])/10000))
+
+double.sample.75 <- function () {
+  temp = rnorm(30)
+  ptemp = t.test(temp)[[3]]
+  while(ptemp < 0.75 && ptemp > 0.05)
+    {
+      l = length(temp)
+      b = l+1
+      e = l+30
+      temp[b:e] = rnorm(30)
+      ptemp = t.test(temp)[[3]]
+    }
+ptemp
+}
+
+dat75 = replicate(10000, double.sample.75()<0.05)
+summary(dat75)
+cat("Number of significant results out of 10,000 with continuation at 0.05<p<0.75: ", summary(dat75)[[3]])
+cat("False positive rate: ", (as.numeric(summary(dat75)[[3]])/10000))
+
+double.sample.07 <- function () {
+  temp = rnorm(30)
+  ptemp = t.test(temp)[[3]]
+  while(ptemp < 0.07 && ptemp > 0.05)
+    {
+      l = length(temp)
+      b = l+1
+      e = l+30
+      temp[b:e] = rnorm(30)
+      ptemp = t.test(temp)[[3]]
+    }
+ptemp
+}
+
+dat07 = replicate(10000, double.sample.07()<0.05)
+summary(dat07)
+cat("Number of significant results out of 10,000 with continuation for 0.05<p<0.07: ", summary(dat07)[[3]])
+cat("False positive rate: ", (as.numeric(summary(dat07)[[3]])/10000))
+```
+With the continue rule at 0.05<p<0.5, the false positive rate is 0.1198.  With the continue rule at 0.05<p<0.75, the false positive rate is 0.1786.  I didn't run it with the p>0.05 rule because that seemed like a recipe for disaster (either it would crash my computer or give a 100% false positive rate).
+
+What do you conclude on the basis of this simulation? How bad is this kind of data-dependent policy?
+
+The more broad your contingent continuation rule is, the more false positives you get (ie you inflate some when you use a p<0.25 continuation rule, more at p<0.5, and even more at p<0.75).  For example, with the continuation rule at 0.05<p<0.07 the false positive rate is not inflated to a particularly large extent (false positive rate = 0.0512), but with the continuation rule at 0.05<p<0.75 the false positive rate is enormously inflated (false positive rate = 0.1786)
+
+
+Part 2: The Linear Model
+========================
+
+2A: Basic Linear Modeling
+-------------------------
+
+Let's use the `ToothGrowth` dataset, on guineapig teeth based on orange juice
+and vitamin C. This is super simple. (Try `?ToothGrowth`).
+
+First plot the data, we'll use `qplot` to understand how `len` (tooth length) depends on `dose` (amount of Vitamin C) and `supp` (delivery method).
+
+```{r}
+dev.off()
+#qplot(dose, len, colour = supp, data = ToothGrowth)
+qplot(dose, len, geom = "boxplot", facets = . ~supp, data = ToothGrowth)
+```
+
+So now you see what's going on. 
+
+Next, always make a histogram of the DV before making a linear model! This reveals the distribution and can be helpful in choosing your model type.
+
+```{r}
+hist(ToothGrowth$len)
+qplot(len, geom = "histogram", facets = dose ~supp, data = ToothGrowth)
+```
+well. erm. shit looks kinda weird and not normal, so. eh. 
+
+Now make a linear model of tooth lengths using `lm`. Try making one with main effects and interactions and another with just main  effects. Make sure to assign them to variables so that you can get them later.
+
+```{r}
+mod.main = with(ToothGrowth, lm(len~dose + supp))
+mod.int = with(ToothGrowth, lm(len~dose*supp))
+summary(mod.main)
+summary(mod.int)
+```
+
+Now try taking out the intercept, using a -1 term in the formula. what does this do?
+
+```{r}
+mod.main.0 = with(ToothGrowth, lm(len~ -1 + dose + supp))
+mod.int.0 = with(ToothGrowth, lm(len~-1 + dose*supp))
+summary(mod.main.0)
+summary(mod.int.0)
+
+anova(mod.main, mod.int) #significant
+
+#with(ToothGrowth, plot(len ~ dose, col = supp))
+#abline(mod.main)
+#grid.oj <- with(ToothGrowth, expand.grid(
+#  supp = "oj", dose = as.numeric(levels(factor(dose)))
+#))
+#grid.vc <- with(ToothGrowth, expand.grid(
+#  supp = "vc", dose = as.numeric(levels(factor(dose)))
+#))
+
+grid <- with(ToothGrowth, expand.grid(
+  supp = levels(supp), dose = as.numeric(levels(factor(dose)))
+))
+
+#grid.oj$len <- stats::predict(mod.main, newdata=grid.oj)
+#grid.vc$len <- stats::predict(mod.main, newdata=grid.vc)
+
+
+#linedat = data.frame(oj = predict (mod.main, newdata = preds.oj), vc = predict (mod.main, newdata = preds.vc))
+
+#plot with lines from the additive model with intercept
+grid$len <- stats::predict(mod.main, newdata=grid)
+ggplot(data = ToothGrowth, aes(x=dose, y=len)) + geom_point() + geom_point(aes(colour=supp)) + geom_line(data= filter(grid, supp == "OJ"), aes(color = supp))+ geom_line(data= filter(grid, supp == "VC"), aes(color = supp)) + ggtitle("Additive model with intercept")
+
+#plot with lines from additive model without intercept
+grid$len <- stats::predict(mod.main.0, newdata=grid)
+ggplot(data = ToothGrowth, aes(x=dose, y=len)) + geom_point() + geom_point(aes(colour=supp)) + geom_line(data= filter(grid, supp == "OJ"), aes(color = supp))+ geom_line(data= filter(grid, supp == "VC"), aes(color = supp)) + ggtitle("Additive model without intercept")
+
+#plot with lines from interactive model with intercept
+grid$len <- stats::predict(mod.int, newdata=grid)
+ggplot(data = ToothGrowth, aes(x=dose, y=len)) + geom_point() + geom_point(aes(colour=supp)) + geom_line(data= filter(grid, supp == "OJ"), aes(color = supp))+ geom_line(data= filter(grid, supp == "VC"), aes(color = supp)) + ggtitle("Interactive model with intercept")
+
+#plot with lines from interactive model without intercept
+grid$len <- stats::predict(mod.int.0, newdata=grid)
+ggplot(data = ToothGrowth, aes(x=dose, y=len)) + geom_point() + geom_point(aes(colour=supp)) + geom_line(data= filter(grid, supp == "OJ"), aes(color = supp))+ geom_line(data= filter(grid, supp == "VC"), aes(color = supp)) + ggtitle("Interactive model without intercept")
+
+```
+This forces the intercept to be 0. 
+
+Thought question: Take a moment to interpret the coefficients of the model. 
+Q1 - What are the units?
+teeeeth growth
+Q2 - How does the interaction relate to the plot?
+if there were an interaction, the slope of the line would be different for OJ than for VC.  looks pretty subtle in teh plot, can't really see it.
+Q3 - Should there be an interaction in the model? What does it mean? How important is it?  
+ehhhh, not sure.  it would mean that the effect of dose on tooth growth is different depending on the delivery method.  
+
+Now make predictions from the model you like the best. What should happen with
+doses of 0, 1.5, 2.5, and 10 under both supplements? 
+
+HINT: use the `predict` function ...
+
+HINT 2: you will have to make a dataframe to do the prediction with, so use something like `data.frame(dose=...)`.
+
+```{r}
+
+preds.oj = data.frame(dose = c(0, 1.5, 2.5, 10), supp ="OJ")
+preds.vc = data.frame(dose = c(0, 1.5, 2.5, 10), supp ="VC")
+cat("Predictions using interactive model with intercept for OJ at doses of 0, 1.5, 2.5, 10: ", predict(mod.int, newdata = preds.oj))
+cat("Predictions using interactive model with intercept for VC at doses of 0, 1.5, 2.5, 10: ", predict(mod.int, newdata = preds.vc))
+```
+I wouldn't really want to predict out to a dose of 10, as there is no reason to believe that tooth growth would continue at a linear rate all the way up to such a high dosage.
+
+Now plot the residuals from the original model. How do they look?
+HINT: `?resid`
+
+```{r}
+plot(mod.main, which = 1)
+plot(mod.int, which = 1)
+qplot(residuals(mod.int), fitted(mod.int))
+#with(ToothGrowth, qplot(residuals(mod.int), fitted(mod.int), facets = .~supp))
+
+fmod = fortify(mod.int)
+#fmod$len <- stats::predict(mod.main, newdata=grid)
+
+qplot(.fitted, .resid, data = fmod) +
+  geom_hline(yintercept = 0) + geom_smooth(se=FALSE)
+
+#qplot(.fitted, .stdresid, data = fmod) +
+#  geom_hline(yintercept = 0) + geom_smooth(se=FALSE)
+
+```
+They don't look super hot, there's a clear pattern in the residuals, indicating that perhaps the linear model is not the best fit for these data. Bummer.
+
+
+BONUS: test them for normality of distribution using a quantile-quantile plot.
+
+HINT: `?qqplot` and `?qqnorm`
+
+```{r}
+plot(mod.int, which = 2)
+qqnorm(residuals(mod.int))
+#qqplot(residuals(mod.main))
+```
+Well those at least look pretty good
+
+2B: Exploratory Linear Modeling
+-------------------------------
+
+What the heck is going on? Load data from Frank, Vul, Saxe (2011, Infancy), a study in which we measured infants' looking to hands in moving scenes. There were infants from 3 months all the way to about two years, and there were two movie conditions (`Faces_Medium`, in which kids played on a white background, and `Faces_Plus`, in which the backgrounds were more complex and the people in the videos were both kids and adults). Forgive our bad naming conventions.
+
+Try to figure out what the most reasonable linear model of the data is.
+
+```{r}
+d <- read.csv("../data/FVS2011-hands.csv")
+
+qplot(age, hand.look, facets = .~ condition, data = d)
+qplot(age, hand.look, colour = condition, data = d)
+
+mod1 = with(d, lm(hand.look ~ age + condition))
+summary(mod1)
+
+mod2 = with(d, lm(hand.look ~ age*condition))
+summary(mod2)
+
+anova(mod1, mod2)
+```
+
+Plot that model on the same plot as the data.
+
+HINT: you can do this either using `predict` or (if you are feeling confident of your understanding of the models) using the built-in linear models in `ggplot`'s `geom_smooth`. 
+
+```{r}
+dat <- with(d, expand.grid(
+  condition = levels(condition), age = as.numeric(levels(factor(age)))
+))
+
+#plot with lines from the interactive
+dat$hand.look <- stats::predict(mod2, newdata=dat)
+ggplot(data = d, aes(x=age, y=hand.look)) + geom_point() + geom_point(aes(colour=condition)) + geom_line(data= filter(dat, condition == "Faces_Medium"), aes(color = condition))+ geom_line(data= filter(dat, condition == "Faces_Plus"), aes(color = condition)) + ggtitle("Interactive model")
+```
+
+What do you conclude from this pattern of data?
+
+Greater age predicts longer hand look times.  The effect of age on hand look times is stronger when the scenes are more complex.
