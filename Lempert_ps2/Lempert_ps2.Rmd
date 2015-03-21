@@ -220,13 +220,11 @@ dev.off()
 #ds.sub = ds %>% group_by(subid, congruent)
 #ds.sub.sum = summarise(ds.sub, mRT = mean(RT))
 #ds %>% group_by(subid, congruent) %>% summarise(bet = mean(Answer_cost, na.rm=TRUE))
-
 #ds.s = ds %>% group_by(subid) %>% mutate(subavg = mean(RT, na.rm = TRUE))
 
 ds.s = ds %>% group_by(subid, congruent, presentation.time, operand) %>% mutate(rtavg = mean(RT, na.rm=TRUE))
 #ds.s = ds.s %>% group_by(subid, operand) %>% summarise(rt.diff = identity(rtavg[congruent=="no"] - rtavg[congruent=="yes"]))
 #ds.avg = ds.s %>% group_by(subid, operand) %>% do(rt.diff = .$rtavg[.$congruent=="no"] - .$rtavg[.$congruent=="yes"])
-
 #ds.avg = ds.s %>% group_by(subid, operand) %>% mutate(rt.diff = filter(.$congruent =="no")$rtavg[[1]] - filter(.$congruent == "yes")$rtavg[[1]])
 ds.avg = ds.s %>% group_by(subid, operand, presentation.time) %>% summarise(rt.diff = (rtavg[congruent =="no"]-rtavg[congruent=="yes"])[[1]])
 
@@ -234,6 +232,7 @@ ds.avg = ds.avg %>% group_by(presentation.time, operand) %>% mutate(sem = sem(rt
 
 ds.f = ds.avg %>% group_by(presentation.time, operand) %>% summarise(rt = mean(rt.diff), sem = sem(rt.diff), n=n())
 
+ds.new = ds %>% group_by(subid, congruent, presentation.time, operand) %>% summarise(rtavg = mean(RT, na.rm=TRUE)) %>% spread(congruent, rtavg) %>% mutate(rt.diff = no-yes) %>% group_by(presentation.time, operand) %>% summarise(avg.diff = mean(rt.diff), sem = sem(rt.diff), n=n()) #well, this way of doing things is much more elegant, but ultimately got me the same answer
 
 
 #ummmm... doesn't look too different by condition... also why is it removing data??
@@ -244,23 +243,23 @@ ds.f = ds.avg %>% group_by(presentation.time, operand) %>% summarise(rt = mean(r
 Now plot this summary, giving more or less the bar plot that Sklar et al. gave (though I would keep operation as a variable here. Make sure you get some error bars on there (e.g. `geom_errorbar` or `geom_linerange`). 
 
 ```{r}
-ggplot(ds.f, aes(x = presentation.time, y=rt)) + geom_bar(stat = "identity")
+#ggplot(ds.f, aes(x = presentation.time, y=rt)) + geom_bar(stat = "identity")
 
-qplot(x=presentation.time, y=rt, facets = .~operand, data = ds.f, geom="bar", stat="identity", position = "dodge", colour = "red") + geom_errorbar(aes(ymin = rt-sem, ymax = rt+sem), width = 0.2)
+qplot(x=presentation.time, y=rt, facets = .~operand, data = ds.f, geom="bar", stat="identity", position = "dodge", fill = presentation.time) + geom_errorbar(aes(ymin = rt-sem, ymax = rt+sem), width = 0.2) + xlab("Presentation Time") + ylab("[(avg RT in priming cond) − (avg RT in control cond)] (ms)") + ggtitle("Facilitation effect \nError bars denote SEM.")
 
-geom_errorbar(aes(ymin=len-ci, ymax=len+ci),
-                  width=.2
-qplot(x=group, y=mean, fill=variable,
-                       data=means, geom="bar", stat="identity",
-                       position="dodge")
 
-qplot(operand, rt.diff, data = ds.avg)
-qplot(x=operand, y=rt.diff, geom = "bar", stat = "identity", position = "dodge", data = ds.avg)
+#qplot(operand, rt.diff, data = ds.avg)
+#qplot(x=operand, y=rt.diff, geom = "bar", stat = "identity", position = "dodge", data = ds.avg)
 
-ggplot(ds.avg, aes(x = presentation.time, y=rt.diff)) + geom_bar(stat = "identity") + theme_grey()
+#ggplot(ds.avg, aes(x = presentation.time, y=rt.diff)) + geom_bar(stat = "identity") + theme_grey()
+              
+              
+
 ```
 
 What do you see here? How close is it to what Sklar et al. report? Do the error bars match? How do you interpret these data? 
+
+Looks pretty similar, except their SEM error bars are about half as large as my SEM error bars.  
 
 Challenge problem: verify Sklar et al.'s claim about the relationship between RT and the objective manipulation check.
 
